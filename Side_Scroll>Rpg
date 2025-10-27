@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>별빛의 여전사 - 2D RPG</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      background-color: #000;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
+    canvas {
+      border: 2px solid #fff;
+      background: url('images/bg.png') no-repeat center/cover;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="gameCanvas" width="960" height="540"></canvas>
+
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    // 이미지 로드
+    const images = {};
+    const toLoad = {
+      player: 'images/player.png',
+      slime: 'images/slime.png',
+      goblin: 'images/goblin.png',
+      door: 'images/door.png',
+      arrow: 'images/arrow.png',
+      bg: 'images/bg.png'
+    };
+    let loaded = 0;
+    const total = Object.keys(toLoad).length;
+    for (let key in toLoad) {
+      images[key] = new Image();
+      images[key].src = toLoad[key];
+      images[key].onload = () => {
+        loaded++;
+        if (loaded === total) init();
+      };
+    }
+
+    // 키 입력
+    let keys = {};
+    document.addEventListener('keydown', e => keys[e.key] = true);
+    document.addEventListener('keyup', e => keys[e.key] = false);
+    window.addEventListener('blur', () => keys = {});
+
+    // 객체 설정
+    const player = {
+      x: 100, y: 380, w: 80, h: 96,
+      dx: 0, dy: 0,
+      speed: 4, jumpPower: -12,
+      grounded: false,
+      hp: 5,
+      shootCooldown: 0
+    };
+    const gravity = 0.6;
+
+    const enemies = [
+      { x: 400, y: 430, w: 70, h: 70, type: 'slime', alive: true },
+      { x: 650, y: 420, w: 80, h: 80, type: 'goblin', alive: true }
+    ];
+    const door = { x: 880, y: 380, w: 80, h: 120, open: false };
+
+    const arrows = [];
+
+    function init() {
+      requestAnimationFrame(gameLoop);
+    }
+
+    function gameLoop() {
+      update();
+      draw();
+      requestAnimationFrame(gameLoop);
+    }
+
+    function update() {
+      // 이동
+      if (keys['ArrowRight']) player.dx = player.speed;
+      else if (keys['ArrowLeft']) player.dx = -player.speed;
+      else player.dx = 0;
+
+      if (keys['ArrowUp'] && player.grounded) {
+        player.dy = player.jumpPower;
+        player.grounded = false;
+      }
+
+      // 화살 발사 (스페이스바)
+      if (keys[' '] && player.grounded) {
+        if (!player.shootCooldown) {
+          arrows.push({
+            x: player.x + player.w,
+            y: player.y + player.h / 2 - 12,
+            w: 80,
+            h: 20,
+            speed: 10
+          });
+          player.shootCooldown = 20;
+        }
+      }
+      if (player.shootCooldown > 0) player.shootCooldown--;
+
+      // 중력 적용
+      player.dy += gravity;
+      player.x += player.dx;
+      player.y += player.dy;
+      if (player.y + player.h >= 500) {
+        player.y = 500 - player.h;
+        player.dy = 0;
+        player.grounded = true;
+      }
+
+      // 화살 이동 및 충돌 처리
+      arrows.forEach((a, i) => {
+        a.x += a.speed;
+        if (a.x > canvas.width) arrows.splice(i, 1);
+        enemies.forEach(e => {
+          if (
+            e.alive &&
+            a.x < e.x + e.w &&
+            a.x + a.w > e.x &&
+            a.y < e.y + e.h &&
+            a.y + a.h > e.y
+          ) {
+            e.alive = false;
+            arrows.splice(i, 1);
+          }
+        });
+      });
+
+      // 문 열림 조건
+      if (enemies.every(e => !e.alive)) door.open = true;
+
+      // 문 도달
+      if (door.open && player.x + player.w > door.x) {
+        alert('🎉 스테이지 클리어!');
+        player.x = 100;
+        enemies.forEach(e => e.alive = true);
+        door.open = false;
+        keys = {}; // 키 초기화
+      }
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(images.bg, 0, 0, canvas.width, canvas.height);
+
+      // 문
+      ctx.globalAlpha = door.open ? 1 : 0.5;
+      ctx.drawImage(images.door, door.x, door.y, door.w, door.h);
+      ctx.globalAlpha = 1;
+
+      // 플레이어
+      ctx.drawImage(images.player, player.x, player.y, player.w, player.h);
+
+      // 화살
+      arrows.forEach(a => {
+        ctx.drawImage(images.arrow, a.x, a.y, a.w, a.h);
+      });
+
+      // 적들
+      enemies.forEach(e => {
+        if (e.alive) ctx.drawImage(images[e.type], e.x, e.y, e.w, e.h);
+      });
+    }
+  </script>
+</body>
+</html>
